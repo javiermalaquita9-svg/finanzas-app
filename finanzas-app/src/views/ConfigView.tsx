@@ -6,15 +6,17 @@ import { formatCurrency } from '../utils';
 
 interface ConfigViewProps {
   userData: UserData;
-  setUserData: (data: UserData) => void;
+  updateUserData: (data: Partial<UserData>) => Promise<void>;
   categories: Categories;
-  setCategories: React.Dispatch<React.SetStateAction<Categories>>;
+  updateCategories: (categories: Categories) => Promise<void>;
   cards: CardData[];
-  setCards: (cards: CardData[]) => void;
-  handleResetApp: () => void;
+  addCard: (card: Omit<CardData, 'id'>) => Promise<void>;
+  deleteCard: (id: string) => Promise<void>;
+  handleSignOut: () => void;
+  handleFullReset: () => void;
 }
 
-export const ConfigView = ({ userData, setUserData, categories, setCategories, cards, setCards, handleResetApp }: ConfigViewProps) => {
+export const ConfigView = ({ userData, updateUserData, categories, updateCategories, cards, addCard, deleteCard, handleSignOut, handleFullReset }: ConfigViewProps) => {
   const [newIncome, setNewIncome] = useState('');
   const [newExpense, setNewExpense] = useState('');
   const [newCard, setNewCard] = useState({ name: '', limit: '' });
@@ -51,14 +53,14 @@ export const ConfigView = ({ userData, setUserData, categories, setCategories, c
       const draggedItemContent = list[source.position];
       list.splice(source.position, 1);
       list.splice(destination.position, 0, draggedItemContent);
-      setCards(list);
+      // TODO: Reordenar las tarjetas requiere una lógica más compleja (ej. un campo 'order' en Firestore).
+      // Por ahora, el reordenamiento es solo visual y se reiniciará al recargar.
     } else {
       const typeKey = source.type as keyof Categories;
       const list = [...categories[typeKey]];
       const draggedItemContent = list[source.position];
       list.splice(source.position, 1);
-      list.splice(destination.position, 0, draggedItemContent);
-      setCategories(prev => ({ ...prev, [typeKey]: list }));
+      list.splice(destination.position, 0, draggedItemContent);      updateCategories({ ...categories, [typeKey]: list });
     }
 
     dragItem.current = null;
@@ -67,7 +69,7 @@ export const ConfigView = ({ userData, setUserData, categories, setCategories, c
 
   const handleAddCategory = (type: keyof Categories, value: string, setValue: (s: string) => void) => {
     if (!value) return;
-    setCategories(prev => ({ ...prev, [type]: [...prev[type], value] }));
+    updateCategories({ ...categories, [type]: [...categories[type], value] });
     setValue('');
   };
 
@@ -78,16 +80,16 @@ export const ConfigView = ({ userData, setUserData, categories, setCategories, c
 
   const handleAddCard = () => {
     if (!newCard.name || !newCard.limit) return;
-    setCards([...cards, { id: Date.now(), name: newCard.name, limit: parseFloat(newCard.limit) }]);
+    addCard({ name: newCard.name, limit: parseFloat(newCard.limit) });
     setNewCard({ name: '', limit: '' });
   };
 
   const removeCategory = (type: keyof Categories, cat: string) => {
-    setCategories(prev => ({ ...prev, [type]: prev[type].filter(c => c !== cat) }));
+    updateCategories({ ...categories, [type]: categories[type].filter(c => c !== cat) });
   };
 
   const handleSaveProfile = () => {
-    // Logic is handled by useEffect in App.tsx, but we show a confirmation here
+    // Los datos se guardan al cambiar (onChange), esto es solo para feedback del usuario.
     alert("Perfil actualizado correctamente");
   };
 
@@ -99,7 +101,7 @@ export const ConfigView = ({ userData, setUserData, categories, setCategories, c
            <div className="text-xs text-slate-400 mt-1">Personaliza tu experiencia y gestiona tus datos</div>
         </div>
         <button 
-          onClick={handleResetApp} 
+          onClick={handleSignOut} 
           className="px-4 py-2 text-sm text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium border border-rose-100 shadow-sm"
         >
           <LogOut size={16} /> Cerrar Sesión
@@ -109,7 +111,7 @@ export const ConfigView = ({ userData, setUserData, categories, setCategories, c
       <Card className="p-6">
         <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2"><Settings size={18} /> Perfil de Usuario</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input label="Nombre" value={userData.name} onChange={e => setUserData({ ...userData, name: e.target.value })} className="mb-0" />
+          <Input label="Nombre" value={userData.name} onChange={e => updateUserData({ name: e.target.value })} className="mb-0" />
 
           {/* Phone Field */}
           <div className="flex flex-col gap-1 mb-0 w-full">
@@ -118,7 +120,7 @@ export const ConfigView = ({ userData, setUserData, categories, setCategories, c
               <select
                 className="px-2 py-2 bg-white border-r border-slate-200 text-sm focus:outline-none text-slate-700 min-w-[80px]"
                 value={userData.countryCode || '+56'}
-                onChange={e => setUserData({ ...userData, countryCode: e.target.value })}
+                onChange={e => updateUserData({ countryCode: e.target.value })}
               >
                 <option value="+56">🇨🇱 +56</option>
                 <option value="+54">🇦🇷 +54</option>
@@ -133,14 +135,14 @@ export const ConfigView = ({ userData, setUserData, categories, setCategories, c
               </select>
               <input
                 className="flex-1 px-3 py-2 border-none focus:outline-none text-slate-800 bg-transparent"
-                value={userData.phone}
-                onChange={e => setUserData({ ...userData, phone: e.target.value })}
+                value={userData.phone || ''}
+                onChange={e => updateUserData({ phone: e.target.value })}
                 placeholder="9 1234 5678"
               />
             </div>
           </div>
 
-          <Input label="Correo" value={userData.email} onChange={e => setUserData({ ...userData, email: e.target.value })} className="mb-0" />
+          <Input label="Correo" value={userData.email || ''} onChange={e => updateUserData({ email: e.target.value })} className="mb-0" />
         </div>
         <div className="flex justify-end mt-4">
             <Button onClick={handleSaveProfile} variant="primary" className="text-sm px-6">
@@ -241,14 +243,16 @@ export const ConfigView = ({ userData, setUserData, categories, setCategories, c
                     <p className="text-xs text-slate-400">{formatCurrency(card.limit)}</p>
                   </div>
                 </div>
-                <button onClick={() => setCards(cards.filter(c => c.id !== card.id))} className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><X size={14} /></button>
+                <button onClick={() => deleteCard(card.id)} className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <X size={14} />
+                </button>
               </div>
             ))}
           </div>
         </Card>
       </div>
       <div className="pt-6 border-t border-slate-200 flex justify-end">
-        <button onClick={handleResetApp} className="w-full md:w-1/5 py-2 text-sm text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors flex items-center justify-center gap-2">
+        <button onClick={handleFullReset} className="w-full md:w-1/5 py-2 text-sm text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors flex items-center justify-center gap-2">
           <Trash2 size={14} /> Resetear Aplicación
         </button>
       </div>

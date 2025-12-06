@@ -1,7 +1,7 @@
 export type TransactionType = 'ingreso' | 'gasto' | 'ahorro';
 
 export interface Transaction {
-  id: number;
+  id: string;
   type: TransactionType;
   category: string;
   description: string;
@@ -12,7 +12,7 @@ export interface Transaction {
 }
 
 export interface CardData {
-  id: number;
+  id: string;
   name: string;
   limit: number;
 }
@@ -30,7 +30,7 @@ export interface Categories {
 }
 
 export interface WishlistItem {
-  id: number;
+  id: string;
   name: string;
   link: string;
   price: number;

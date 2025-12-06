@@ -8,12 +8,14 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Cartes
 interface SavingsViewProps {
   transactions: Transaction[];
   wishlist: WishlistItem[];
-  setWishlist: (list: WishlistItem[]) => void;
+  addWishlistItem: (item: Omit<WishlistItem, 'id'>) => Promise<void>;
+  deleteWishlistItem: (id: string) => Promise<void>;
   acquisitions: Acquisition[];
-  setAcquisitions: (list: Acquisition[]) => void;
+  addAcquisition: (item: Omit<Acquisition, 'id'>) => Promise<void>;
+  deleteAcquisition: (id: string) => Promise<void>;
 }
 
-export const SavingsView = ({ transactions, wishlist, setWishlist, acquisitions, setAcquisitions }: SavingsViewProps) => {
+export const SavingsView = ({ transactions, wishlist, addWishlistItem, deleteWishlistItem, acquisitions, addAcquisition, deleteAcquisition }: SavingsViewProps) => {
   const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 7));
   const [wishItem, setWishItem] = useState({ name: '', link: '', price: '' });
 
@@ -23,28 +25,26 @@ export const SavingsView = ({ transactions, wishlist, setWishlist, acquisitions,
 
   const handleWishAdd = () => {
     if (!wishItem.name || !wishItem.price) return;
-    const newItem: WishlistItem = {
-      id: Date.now(),
+    const newItem: Omit<WishlistItem, 'id'> = {
       name: wishItem.name,
       link: wishItem.link,
       price: parseFloat(wishItem.price)
     };
-    setWishlist([...wishlist, newItem]);
+    addWishlistItem(newItem);
     setWishItem({ name: '', link: '', price: '' });
   };
 
-  const deleteWishItem = (id: number) => setWishlist(wishlist.filter(w => w.id !== id));
-  
-  const handlePurchase = (id: number) => {
+  const handlePurchase = (id: string) => {
     const item = wishlist.find(w => w.id === id);
     if (!item) return;
-    const purchasedItem: Acquisition = { ...item, purchaseDate: new Date().toISOString().split('T')[0] };
-    setAcquisitions([purchasedItem, ...acquisitions]);
-    setWishlist(wishlist.filter(w => w.id !== id));
+    const { id: purchasedId, ...itemData } = item;
+    const purchasedItem: Omit<Acquisition, 'id'> = { ...itemData, purchaseDate: new Date().toISOString().split('T')[0] };
+    addAcquisition(purchasedItem);
+    deleteWishlistItem(id);
   };
 
-  const deleteAcquisition = (id: number) => {
-    if (window.confirm('¿Eliminar del historial de compras?')) setAcquisitions(acquisitions.filter(a => a.id !== id));
+  const handleDeleteAcquisition = (id: string) => {
+    if (window.confirm('¿Eliminar del historial de compras?')) deleteAcquisition(id);
   };
 
   const handleWishPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -216,8 +216,8 @@ export const SavingsView = ({ transactions, wishlist, setWishlist, acquisitions,
                         <span className="text-xs font-bold text-slate-600">{formatCurrency(item.price)}</span>
                       </div>
                     </div>
-                    <button onClick={() => deleteWishItem(item.id)} className="text-slate-300 hover:text-rose-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <X size={16} />
+                    <button onClick={() => deleteWishlistItem(item.id)} className="text-slate-300 hover:text-rose-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Trash2 size={14} />
                     </button>
                   </div>
                   <div className="space-y-1 pl-6">
@@ -262,7 +262,7 @@ export const SavingsView = ({ transactions, wishlist, setWishlist, acquisitions,
                   </td>
                   <td className="py-4 text-right font-bold text-slate-600">{formatCurrency(item.price)}</td>
                   <td className="py-4 text-right">
-                    <button onClick={() => deleteAcquisition(item.id)} className="text-slate-300 hover:text-rose-500">
+                    <button onClick={() => handleDeleteAcquisition(item.id)} className="text-slate-300 hover:text-rose-500">
                       <Trash2 size={16} />
                     </button>
                   </td>

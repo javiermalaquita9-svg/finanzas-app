@@ -8,21 +8,19 @@ interface CardsViewProps {
   cards: CardData[];
   transactions: Transaction[];
   paidMonths: PaidMonths;
-  setPaidMonths: React.Dispatch<React.SetStateAction<PaidMonths>>;
+  updatePaidMonths: (newPaidMonths: PaidMonths) => Promise<void>;
   setActiveTab: (tab: string) => void;
 }
 
-export const CardsView = ({ cards, transactions, paidMonths, setPaidMonths, setActiveTab }: CardsViewProps) => {
+export const CardsView = ({ cards, transactions, paidMonths, updatePaidMonths, setActiveTab }: CardsViewProps) => {
   const [selectedCardFilter, setSelectedCardFilter] = useState('all');
 
   const toggleMonthPayment = (cardName: string, monthKey: string) => {
     const key = `${cardName}_${monthKey}`;
-    setPaidMonths(prev => {
-      const n = { ...prev };
-      if (n[key]) delete n[key];
-      else n[key] = true;
-      return n;
-    });
+    const newPaidMonths = { ...paidMonths };
+    if (newPaidMonths[key]) delete newPaidMonths[key];
+    else newPaidMonths[key] = true;
+    updatePaidMonths(newPaidMonths);
   };
 
   const { months, matrix, totals, monthlyPaymentStatus } = calculatePaymentMatrix(transactions, cards, paidMonths, selectedCardFilter);

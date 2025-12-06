@@ -1,26 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, AlertCircle } from 'lucide-react';
+import { Menu, AlertCircle, Loader2 } from 'lucide-react';
+import { useAuth } from './AuthContext';
+import { db } from './firebase';
+import { doc, getDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, writeBatch, query, orderBy, getDocs } from 'firebase/firestore';
 import { Sidebar } from './components/Sidebar';
 import { SummaryView } from './views/SummaryView';
 import { SavingsView } from './views/SavingsView';
 import { CardsView } from './views/CardsView';
 import { ReportsView } from './views/ReportsView';
 import { ConfigView } from './views/ConfigView';
+import { LoginView } from './views/LoginView';
 import { Modal, Button, Input } from './components/UI';
 import { Transaction, UserData, Categories, CardData, WishlistItem, Acquisition, PaidMonths } from './types';
 
-// Default Data
+// Default Data for new users
 const defaultCategories = {
   ingreso: ['Salario', 'Ventas', 'Freelance'],
   gasto: ['Alimentación', 'Transporte', 'Servicios', 'Ocio', 'Salud', 'Educación', 'Pago Tarjeta']
 };
 const defaultCards = [
-  { id: 1, name: 'Visa Principal', limit: 1000000 },
-  { id: 2, name: 'Mastercard', limit: 500000 }
+  { name: 'Visa Principal', limit: 1000000 },
+  { name: 'Mastercard', limit: 500000 }
 ];
 
-// Helper to generate seed data
-const generateSeedTransactions = (): Transaction[] => {
+// Helper to generate seed data for new users
+const generateSeedTransactions = (): Omit<Transaction, 'id'>[] => {
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth(); // 0-indexed
@@ -34,160 +38,369 @@ const generateSeedTransactions = (): Transaction[] => {
 
   return [
     // --- INGRESOS ---
-    { id: 1, type: 'ingreso', category: 'Salario', description: 'Sueldo Mensual', amount: 1500000, date: fmtDate(year, month, 1) },
-    { id: 2, type: 'ingreso', category: 'Freelance', description: 'Proyecto Web E-commerce', amount: 450000, date: fmtDate(year, month - 1, 15) },
-    { id: 3, type: 'ingreso', category: 'Ventas', description: 'Venta Consola Antigua', amount: 120000, date: fmtDate(year, month, 10) },
-    { id: 4, type: 'ingreso', category: 'Salario', description: 'Bono Trimestral', amount: 300000, date: fmtDate(year, month - 2, 1) },
+    { type: 'ingreso', category: 'Salario', description: 'Sueldo Mensual', amount: 1500000, date: fmtDate(year, month, 1) },
+    { type: 'ingreso', category: 'Freelance', description: 'Proyecto Web E-commerce', amount: 450000, date: fmtDate(year, month - 1, 15) },
+    { type: 'ingreso', category: 'Ventas', description: 'Venta Consola', amount: 120000, date: fmtDate(year, month, 10) },
+    { type: 'ingreso', category: 'Salario', description: 'Bono Trimestral', amount: 300000, date: fmtDate(year, month - 2, 1) },
 
     // --- GASTOS (Efectivo/Débito) ---
     // Alimentación
-    { id: 10, type: 'gasto', category: 'Alimentación', description: 'Supermercado Lider', amount: 85000, date: fmtDate(year, month, 5) },
-    { id: 11, type: 'gasto', category: 'Alimentación', description: 'Feria Verduras Semanal', amount: 25000, date: fmtDate(year, month, 12) },
-    { id: 12, type: 'gasto', category: 'Alimentación', description: 'Cena Restaurante Italiano', amount: 45000, date: fmtDate(year, month, 20) },
+    { type: 'gasto', category: 'Alimentación', description: 'Supermercado Lider', amount: 85000, date: fmtDate(year, month, 5) },
+    { type: 'gasto', category: 'Alimentación', description: 'Feria Verduras Semanal', amount: 25000, date: fmtDate(year, month, 12) },
+    { type: 'gasto', category: 'Alimentación', description: 'Cena Restaurante Italiano', amount: 45000, date: fmtDate(year, month, 20) },
     
     // Servicios
-    { id: 13, type: 'gasto', category: 'Servicios', description: 'Internet Fibra', amount: 25990, date: fmtDate(year, month, 10) },
-    { id: 14, type: 'gasto', category: 'Servicios', description: 'Cuenta de Luz', amount: 35000, date: fmtDate(year, month, 15) },
-    { id: 15, type: 'gasto', category: 'Servicios', description: 'Plan Celular', amount: 19990, date: fmtDate(year, month, 2) },
+    { type: 'gasto', category: 'Servicios', description: 'Internet Fibra', amount: 25990, date: fmtDate(year, month, 10) },
+    { type: 'gasto', category: 'Servicios', description: 'Cuenta de Luz', amount: 35000, date: fmtDate(year, month, 15) },
+    { type: 'gasto', category: 'Servicios', description: 'Plan Celular', amount: 19990, date: fmtDate(year, month, 2) },
 
     // Transporte
-    { id: 16, type: 'gasto', category: 'Transporte', description: 'Carga Bip!', amount: 15000, date: fmtDate(year, month, 3) },
-    { id: 17, type: 'gasto', category: 'Transporte', description: 'Uber al Aeropuerto', amount: 22000, date: fmtDate(year, month, 25) },
+    { type: 'gasto', category: 'Transporte', description: 'Carga Bip!', amount: 15000, date: fmtDate(year, month, 3) },
+    { type: 'gasto', category: 'Transporte', description: 'Uber al Aeropuerto', amount: 22000, date: fmtDate(year, month, 25) },
 
     // Ocio
-    { id: 18, type: 'gasto', category: 'Ocio', description: 'Entradas Cine IMAX', amount: 18000, date: fmtDate(year, month, 8) },
-    { id: 19, type: 'gasto', category: 'Ocio', description: 'Juego Nintendo Switch', amount: 45000, date: fmtDate(year, month - 1, 20) },
+    { type: 'gasto', category: 'Ocio', description: 'Entradas Cine IMAX', amount: 18000, date: fmtDate(year, month, 8) },
+    { type: 'gasto', category: 'Ocio', description: 'Juego Nintendo Switch', amount: 45000, date: fmtDate(year, month - 1, 20) },
 
     // Salud
-    { id: 20, type: 'gasto', category: 'Salud', description: 'Farmacia Remedios', amount: 12500, date: fmtDate(year, month, 18) },
-    { id: 21, type: 'gasto', category: 'Salud', description: 'Consulta Dental', amount: 50000, date: fmtDate(year, month - 1, 5) },
+    { type: 'gasto', category: 'Salud', description: 'Farmacia Remedios', amount: 12500, date: fmtDate(year, month, 18) },
+    { type: 'gasto', category: 'Salud', description: 'Consulta Dental', amount: 50000, date: fmtDate(year, month - 1, 5) },
 
     // Educación
-    { id: 22, type: 'gasto', category: 'Educación', description: 'Curso Online Inglés', amount: 75000, date: fmtDate(year, month - 1, 10) },
+    { type: 'gasto', category: 'Educación', description: 'Curso Online Inglés', amount: 75000, date: fmtDate(year, month - 1, 10) },
 
     // --- TARJETAS DE CRÉDITO ---
     // Visa Principal (Compras grandes/Cuotas)
-    { id: 30, type: 'gasto', category: 'Visa Principal', description: 'TV Smart 55" Samsung', amount: 329990, date: fmtDate(year, month - 1, 10), installments: 3, firstPaymentDate: fmtDate(year, month, 5) },
-    { id: 31, type: 'gasto', category: 'Visa Principal', description: 'Pasajes Vacaciones Sur', amount: 450000, date: fmtDate(year, month - 2, 15), installments: 6, firstPaymentDate: fmtDate(year, month - 1, 5) },
-    { id: 32, type: 'gasto', category: 'Visa Principal', description: 'Ropa Temporada Falabella', amount: 120000, date: fmtDate(year, month, 2), installments: 3, firstPaymentDate: fmtDate(year, month + 1, 5) },
-    { id: 33, type: 'gasto', category: 'Visa Principal', description: 'Notebook Trabajo', amount: 890000, date: fmtDate(year, month - 3, 20), installments: 12, firstPaymentDate: fmtDate(year, month - 2, 5) },
+    { type: 'gasto', category: 'Visa Principal', description: 'TV Smart 55" Samsung', amount: 329990, date: fmtDate(year, month - 1, 10), installments: 3, firstPaymentDate: fmtDate(year, month, 5) },
+    { type: 'gasto', category: 'Visa Principal', description: 'Pasajes Vacaciones Sur', amount: 450000, date: fmtDate(year, month - 2, 15), installments: 6, firstPaymentDate: fmtDate(year, month - 1, 5) },
+    { type: 'gasto', category: 'Visa Principal', description: 'Ropa Temporada Falabella', amount: 120000, date: fmtDate(year, month, 2), installments: 3, firstPaymentDate: fmtDate(year, month + 1, 5) },
+    { type: 'gasto', category: 'Visa Principal', description: 'Notebook Trabajo', amount: 890000, date: fmtDate(year, month - 3, 20), installments: 12, firstPaymentDate: fmtDate(year, month - 2, 5) },
 
     // Mastercard (Suscripciones y gastos menores)
-    { id: 40, type: 'gasto', category: 'Mastercard', description: 'Netflix Premium', amount: 10790, date: fmtDate(year, month, 15), installments: 1, firstPaymentDate: fmtDate(year, month, 15) },
-    { id: 41, type: 'gasto', category: 'Mastercard', description: 'Spotify Duo', amount: 9500, date: fmtDate(year, month, 20), installments: 1, firstPaymentDate: fmtDate(year, month, 20) },
-    { id: 42, type: 'gasto', category: 'Mastercard', description: 'Uber Eats Cena', amount: 28500, date: fmtDate(year, month, 12), installments: 1, firstPaymentDate: fmtDate(year, month + 1, 5) },
-    { id: 43, type: 'gasto', category: 'Mastercard', description: 'Suscripción Gym', amount: 35000, date: fmtDate(year, month, 1), installments: 1, firstPaymentDate: fmtDate(year, month, 1) },
+    { type: 'gasto', category: 'Mastercard', description: 'Netflix Premium', amount: 10790, date: fmtDate(year, month, 15), installments: 1, firstPaymentDate: fmtDate(year, month, 15) },
+    { type: 'gasto', category: 'Mastercard', description: 'Spotify Duo', amount: 9500, date: fmtDate(year, month, 20), installments: 1, firstPaymentDate: fmtDate(year, month, 20) },
+    { type: 'gasto', category: 'Mastercard', description: 'Uber Eats Cena', amount: 28500, date: fmtDate(year, month, 12), installments: 1, firstPaymentDate: fmtDate(year, month + 1, 5) },
+    { type: 'gasto', category: 'Mastercard', description: 'Suscripción Gym', amount: 35000, date: fmtDate(year, month, 1), installments: 1, firstPaymentDate: fmtDate(year, month, 1) },
 
     // --- AHORROS ---
-    { id: 50, type: 'ahorro', category: 'Ahorro General', description: 'Ahorro Mes Actual', amount: 150000, date: fmtDate(year, month, 28) },
-    { id: 51, type: 'ahorro', category: 'Ahorro General', description: 'Ahorro Mes Pasado', amount: 120000, date: fmtDate(year, month - 1, 28) },
-    { id: 52, type: 'ahorro', category: 'Ahorro General', description: 'Ahorro hace 2 meses', amount: 100000, date: fmtDate(year, month - 2, 28) },
-    { id: 53, type: 'ahorro', category: 'Ahorro General', description: 'Ahorro hace 3 meses', amount: 90000, date: fmtDate(year, month - 3, 28) },
-    { id: 54, type: 'ahorro', category: 'Ahorro General', description: 'Bono Navidad Ahorrado', amount: 200000, date: fmtDate(year, month - 4, 25) },
-  ];
+    { type: 'ahorro', category: 'Ahorro General', description: 'Ahorro Mes Actual', amount: 150000, date: fmtDate(year, month, 28) },
+    { type: 'ahorro', category: 'Ahorro General', description: 'Ahorro Mes Pasado', amount: 120000, date: fmtDate(year, month - 1, 28) },
+    { type: 'ahorro', category: 'Ahorro General', description: 'Ahorro hace 2 meses', amount: 100000, date: fmtDate(year, month - 2, 28) },
+    { type: 'ahorro', category: 'Ahorro General', description: 'Ahorro hace 3 meses', amount: 90000, date: fmtDate(year, month - 3, 28) },
+    { type: 'ahorro', category: 'Ahorro General', description: 'Bono Navidad Ahorrado', amount: 200000, date: fmtDate(year, month - 4, 25) },
+  ] as Omit<Transaction, 'id'>[];
 };
 
-const generateSeedWishlist = (): WishlistItem[] => [
-  { id: 101, name: 'PlayStation 5', link: '', price: 549990 },
-  { id: 102, name: 'Viaje a Brasil', link: '', price: 850000 },
-  { id: 103, name: 'iPhone 15', link: '', price: 949990 },
-  { id: 104, name: 'Bicicleta Trek', link: '', price: 380000 },
-  { id: 105, name: 'Silla Gamer', link: '', price: 189990 },
-];
+const generateSeedWishlist = (): Omit<WishlistItem, 'id'>[] => [
+  { name: 'PlayStation 5', link: '', price: 549990 },
+  { name: 'Viaje a Brasil', link: '', price: 850000 },
+  { name: 'iPhone 15', link: '', price: 949990 },
+  { name: 'Bicicleta Trek', link: '', price: 380000 },
+  { name: 'Silla Gamer', link: '', price: 189990 },
+] as Omit<WishlistItem, 'id'>[];
 
 export default function App() {
+  const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('resumen');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Modals state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [transactionToDelete, setTransactionToDelete] = useState<number | null>(null);
+  const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
   const [isDeletingAcquisition, setIsDeletingAcquisition] = useState(false);
   
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [editForm, setEditForm] = useState({ description: '', amount: '', date: '' });
 
-  // Persistent State
-  const [userData, setUserData] = useState<UserData>(() => {
-    const s = localStorage.getItem('gf_userData');
-    const p = s ? JSON.parse(s) : { name: 'Usuario', phone: '', email: '' };
-    if (!p.countryCode) p.countryCode = '+56';
-    return p;
-  });
+  // App State - now loaded from Firestore
+  const [userData, setUserData] = useState<UserData>({ name: '', phone: '', email: '', countryCode: '+56' });
+  const [categories, setCategories] = useState<Categories>(defaultCategories);
+  const [cards, setCards] = useState<CardData[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
+  const [acquisitions, setAcquisitions] = useState<Acquisition[]>([]);
+  const [paidMonths, setPaidMonths] = useState<PaidMonths>({});
 
-  const [categories, setCategories] = useState<Categories>(() => 
-    JSON.parse(localStorage.getItem('gf_categories') || JSON.stringify(defaultCategories))
-  );
+  // Data loading and synchronization with Firestore
+  useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+      // Clear data on logout
+      setUserData({ name: '', phone: '', email: '', countryCode: '+56' });
+      setTransactions([]);
+      setCards([]);
+      setWishlist([]);
+      setAcquisitions([]);
+      return;
+    }
 
-  const [cards, setCards] = useState<CardData[]>(() => 
-    JSON.parse(localStorage.getItem('gf_cards') || JSON.stringify(defaultCards))
-  );
+    setIsLoading(true);
+    const userDocRef = doc(db, 'users', user.uid);
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('gf_transactions');
-    return saved ? JSON.parse(saved) : generateSeedTransactions();
-  });
+    const setupListeners = () => {
+      const unsubscribes: (() => void)[] = [];
 
-  const [wishlist, setWishlist] = useState<WishlistItem[]>(() => {
-    const saved = localStorage.getItem('gf_wishlist');
-    return saved ? JSON.parse(saved) : generateSeedWishlist();
-  });
+      // Listener for user document (userData, categories, paidMonths)
+      unsubscribes.push(onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setUserData({ name: data.name, email: data.email, phone: data.phone, countryCode: data.countryCode });
+          setCategories(data.categories || defaultCategories);
+          setPaidMonths(data.paidMonths || {});
+        }
+      }));
 
-  const [acquisitions, setAcquisitions] = useState<Acquisition[]>(() => 
-    JSON.parse(localStorage.getItem('gf_acquisitions') || '[]')
-  );
+      // Listeners for sub-collections
+      const collectionsToSync: { [key: string]: any } = {
+        transactions: { setter: setTransactions, orderByField: 'date' },
+        acquisitions: { setter: setAcquisitions, orderByField: 'date' },
+        cards: { setter: setCards, orderByField: 'name' },
+        wishlist: { setter: setWishlist, orderByField: 'price' },
+      };
 
-  const [paidMonths, setPaidMonths] = useState<PaidMonths>(() => 
-    JSON.parse(localStorage.getItem('gf_paid_months') || '{}')
-  );
+      Object.entries(collectionsToSync).forEach(([collectionName, config]) => {
+        const collQuery = query(collection(db, `users/${user.uid}/${collectionName}`), orderBy(config.orderByField, 'desc'));
+        unsubscribes.push(onSnapshot(collQuery, (snapshot) => {
+          const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+          config.setter(items);
+        }, (error) => console.error(`Error listening to ${collectionName}:`, error)));
+      });
+      
+      setIsLoading(false);
+      return () => unsubscribes.forEach(unsub => unsub());
+    };
 
-  // Persistence Effects
-  useEffect(() => localStorage.setItem('gf_userData', JSON.stringify(userData)), [userData]);
-  useEffect(() => localStorage.setItem('gf_categories', JSON.stringify(categories)), [categories]);
-  useEffect(() => localStorage.setItem('gf_cards', JSON.stringify(cards)), [cards]);
-  useEffect(() => localStorage.setItem('gf_transactions', JSON.stringify(transactions)), [transactions]);
-  useEffect(() => localStorage.setItem('gf_wishlist', JSON.stringify(wishlist)), [wishlist]);
-  useEffect(() => localStorage.setItem('gf_acquisitions', JSON.stringify(acquisitions)), [acquisitions]);
-  useEffect(() => localStorage.setItem('gf_paid_months', JSON.stringify(paidMonths)), [paidMonths]);
+    getDoc(userDocRef).then(docSnap => {
+      if (!docSnap.exists()) {
+        // New user: create document with seed data
+        console.log("New user detected. Creating seed data...");
+        const batch = writeBatch(db);
+
+        // 1. Set main user document
+        batch.set(userDocRef, {
+          name: user.displayName || 'Usuario',
+          email: user.email || '',
+          phone: '',
+          countryCode: '+56',
+          categories: defaultCategories,
+          paidMonths: {},
+        });
+
+        // 2. Add transactions to sub-collection
+        generateSeedTransactions().forEach(t => {
+          const transDocRef = doc(collection(db, `users/${user.uid}/transactions`));
+          batch.set(transDocRef, t);
+        });
+
+        // 3. Add cards to sub-collection
+        defaultCards.forEach(c => {
+          const cardDocRef = doc(collection(db, `users/${user.uid}/cards`));
+          batch.set(cardDocRef, c);
+        });
+
+        // 4. Add wishlist to sub-collection
+        generateSeedWishlist().forEach(w => {
+          const wishDocRef = doc(collection(db, `users/${user.uid}/wishlist`));
+          batch.set(wishDocRef, w);
+        });
+
+        // Commit the batch
+        batch.commit().then(() => {
+          console.log('Seed data created successfully!');
+          setupListeners();
+        }).catch(error => {
+          console.error("Error creating seed data:", error);
+          setIsLoading(false);
+        });
+
+      } else {
+        // Existing user, just set up listeners
+        setupListeners();
+      }
+    }).catch(error => {
+      console.error("Error checking for user document:", error);
+      setIsLoading(false);
+    });
+
+  }, [user]);
 
   // Actions
-  const handleResetApp = () => {
-    if (window.confirm('¿Cerrar sesión y borrar los datos locales?')) {
-        localStorage.clear();
-        window.location.reload();
+  const handleSignOut = () => {
+    if (window.confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+        signOut();
     }
   };
 
-  const addTransaction = (newTrans: Transaction) => setTransactions([newTrans, ...transactions]);
+  const handleFullReset = async () => {
+    if (!user) return;
+    if (window.prompt('Esta acción es irreversible y borrará TODOS tus datos. Escribe "BORRAR" para confirmar.') !== 'BORRAR') {
+        return;
+    }
 
-  const promptDelete = (id: number, isAcquisition = false) => {
+    setIsLoading(true);
+    console.log("Iniciando reseteo completo de datos para el usuario:", user.uid);
+
+    try {
+        const userDocRef = doc(db, 'users', user.uid);
+        const subCollections = ['transactions', 'cards', 'wishlist', 'acquisitions'];
+
+        // Borrar todos los documentos en todas las sub-colecciones
+        for (const sub of subCollections) {
+            const subCollectionRef = collection(db, `users/${user.uid}/${sub}`);
+            const snapshot = await getDocs(subCollectionRef);
+            const batch = writeBatch(db);
+            snapshot.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            console.log(`Sub-colección '${sub}' eliminada.`);
+        }
+
+        // Borrar el documento principal del usuario
+        await deleteDoc(userDocRef);
+        console.log("Documento principal del usuario eliminado.");
+
+        // Finalmente, cerrar la sesión del usuario
+        await signOut();
+
+    } catch (error) {
+        console.error("Error durante el reseteo completo:", error);
+        alert("Ocurrió un error al resetear los datos. Por favor, inténtalo de nuevo.");
+        setIsLoading(false);
+    }
+  };
+
+  const updateUserData = async (newUserData: Partial<UserData>) => {
+    if (!user) return;
+    const userDocRef = doc(db, 'users', user.uid);
+    try {
+      // Actualiza solo los campos proporcionados en la base de datos
+      await updateDoc(userDocRef, newUserData);
+    } catch (error) {
+      console.error("Error updating user data:", error);
+    }
+  };
+
+  const updateCategories = async (newCategories: Categories) => {
+    if (!user) return;
+    const userDocRef = doc(db, 'users', user.uid);
+    try {
+      await updateDoc(userDocRef, { categories: newCategories });
+    } catch (error) {
+      console.error("Error updating categories:", error);
+    }
+  };
+
+  const updatePaidMonths = async (newPaidMonths: PaidMonths) => {
+    if (!user) return;
+    const userDocRef = doc(db, 'users', user.uid);
+    try {
+      await updateDoc(userDocRef, { paidMonths: newPaidMonths });
+    } catch (error) {
+      console.error("Error updating paid months:", error);
+    }
+  };
+
+  const addWishlistItem = async (item: Omit<WishlistItem, 'id'>) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, `users/${user.uid}/wishlist`), item);
+    } catch (error) {
+      console.error("Error adding wishlist item:", error);
+    }
+  };
+
+  const addAcquisition = async (item: Omit<Acquisition, 'id'>) => {
+    if (!user) return;
+    try {
+      // Asumimos que también quieres guardar las adquisiciones en una colección
+      // Si no, puedes ajustar esta lógica.
+      await addDoc(collection(db, `users/${user.uid}/acquisitions`), item);
+    } catch (error) {
+      console.error("Error adding acquisition:", error);
+    }
+  };
+
+  const deleteWishlistItem = async (id: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, `users/${user.uid}/wishlist`, id));
+    } catch (error) {
+      console.error("Error deleting wishlist item:", error);
+    }
+  };
+
+  const deleteAcquisition = async (id: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, `users/${user.uid}/acquisitions`, id));
+    } catch (error) {
+      console.error("Error deleting acquisition:", error);
+    }
+  };
+
+  const addCard = async (card: Omit<CardData, 'id'>) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, `users/${user.uid}/cards`), card);
+    } catch (error) {
+      console.error("Error adding card:", error);
+    }
+  };
+
+  const deleteCard = async (id: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, `users/${user.uid}/cards`, id));
+    } catch (error) {
+      console.error("Error deleting card:", error);
+    }
+  };
+
+  // --- Firestore CRUD Functions ---
+  const addTransaction = async (newTransData: Omit<Transaction, 'id'>) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, `users/${user.uid}/transactions`), newTransData);
+    } catch (error) {
+      console.error("Error adding transaction:", error);
+    }
+  };
+
+  const promptDelete = (id: string, isAcquisition = false) => {
     setTransactionToDelete(id);
     setIsDeletingAcquisition(isAcquisition);
     setDeleteModalOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (transactionToDelete) {
-      if (isDeletingAcquisition) {
-        setAcquisitions(acquisitions.filter(a => a.id !== transactionToDelete));
-      } else {
-        setTransactions(transactions.filter(t => t.id !== transactionToDelete));
+  const confirmDelete = async () => {
+    if (transactionToDelete && user) {
+      const collectionName = isDeletingAcquisition ? 'acquisitions' : 'transactions';
+      try {
+        await deleteDoc(doc(db, `users/${user.uid}/${collectionName}`, transactionToDelete));
+      } catch (error) {
+        console.error("Error deleting document:", error);
       }
       setTransactionToDelete(null);
       setDeleteModalOpen(false);
     }
   };
 
-  const saveEdit = () => {
-    if (!transactionToEdit) return;
-    setTransactions(transactions.map(t => 
-      t.id === transactionToEdit.id 
-        ? { ...t, description: editForm.description, amount: parseFloat(editForm.amount), date: editForm.date } 
-        : t
-    ));
-    setEditModalOpen(false);
-    setTransactionToEdit(null);
+  const saveEdit = async () => {
+    if (!transactionToEdit || !user) return;
+    try {
+      const docRef = doc(db, `users/${user.uid}/transactions`, transactionToEdit.id);
+      await updateDoc(docRef, {
+        description: editForm.description,
+        amount: parseFloat(editForm.amount),
+        date: editForm.date
+      });
+    } catch (error) {
+      console.error("Error updating transaction:", error);
+    } finally {
+      setEditModalOpen(false);
+      setTransactionToEdit(null);
+    }
   };
 
   const summary = transactions.reduce((acc, curr) => {
@@ -216,17 +429,19 @@ export default function App() {
       case 'ahorros':
         return <SavingsView 
           transactions={transactions} 
-          wishlist={wishlist} 
-          setWishlist={setWishlist} 
-          acquisitions={acquisitions} 
-          setAcquisitions={setAcquisitions} 
+          wishlist={wishlist}
+          addWishlistItem={addWishlistItem}
+          deleteWishlistItem={deleteWishlistItem}
+          acquisitions={acquisitions}
+          addAcquisition={addAcquisition}
+          deleteAcquisition={deleteAcquisition}
         />;
       case 'tarjetas':
         return <CardsView 
           cards={cards} 
           transactions={transactions} 
           paidMonths={paidMonths} 
-          setPaidMonths={setPaidMonths} 
+          updatePaidMonths={updatePaidMonths}
           setActiveTab={setActiveTab} 
         />;
       case 'reporte':
@@ -238,18 +453,34 @@ export default function App() {
         />;
       case 'configuracion':
         return <ConfigView 
-          userData={userData} 
-          setUserData={setUserData} 
-          categories={categories} 
-          setCategories={setCategories} 
+          userData={userData}
+          updateUserData={updateUserData}
+          categories={categories}
+          updateCategories={updateCategories}
           cards={cards} 
-          setCards={setCards} 
-          handleResetApp={handleResetApp} 
+          addCard={addCard}
+          deleteCard={deleteCard}
+          handleSignOut={handleSignOut}
+          handleFullReset={handleFullReset}
         />;
       default:
         return null;
     }
   };
+
+  // Si no hay usuario, mostrar la pantalla de login
+  if (!user) {
+    return <LoginView />;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-100 text-slate-600">
+        <Loader2 className="h-12 w-12 animate-spin mb-4" />
+        <p className="text-lg">Cargando tus datos...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-900 overflow-hidden print:overflow-visible print:h-auto">
