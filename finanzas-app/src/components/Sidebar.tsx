@@ -1,6 +1,6 @@
 import React from 'react';
 import { LayoutDashboard, DollarSign, CreditCard, PieChart, Settings, Wallet } from 'lucide-react';
-import { UserData } from '../types'; // This path is likely correct
+import { UserData } from '../types';
 
 interface SidebarProps {
   activeTab: string;
