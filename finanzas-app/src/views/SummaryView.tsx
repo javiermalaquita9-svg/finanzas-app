@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, TrendingUp, TrendingDown, CreditCard, Trash2 } from 'lucide-react';
-import { Card, Button, Input, Select } from '../components/UI';
+import { Card, Button, Input, Select } from '../components/UI'; // This path is likely correct
 import { Transaction, Categories, CardData, SummaryData, PaidMonths } from '../types';
 import { formatCurrency, getMonthKey } from '../utils';
 
