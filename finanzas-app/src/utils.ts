@@ -1,4 +1,5 @@
-import { Transaction, CardData, PaidMonths } from './types';
+import { Transaction, CardData, PaidMonths, Categories } from './types';
+import { model } from '../gemini';
 
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
@@ -6,6 +7,35 @@ export const formatCurrency = (amount: number): string => {
 
 export const getMonthKey = (date: Date): string => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
+/**
+ * Usa la IA de Gemini para sugerir una categoría basada en la descripción de una transacción.
+ * @param description La descripción del gasto o ingreso.
+ * @param categories Las categorías disponibles.
+ * @returns El nombre de la categoría sugerida o null si falla.
+ */
+export const getCategoryFromAI = async (description: string, categories: Categories): Promise<string | null> => {
+  if (!description.trim()) return null;
+
+  const allCategories = [...categories.gasto, ...categories.ingreso];
+  const prompt = `
+    Dada la siguiente descripción de una transacción financiera: "${description}"
+    Y la siguiente lista de categorías disponibles: ${allCategories.join(', ')}.
+    ¿Cuál es la categoría más apropiada para esta transacción?
+    Responde únicamente con el nombre exacto de la categoría de la lista. Si ninguna es apropiada o no estás seguro, responde con "null".
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text().trim();
+
+    return allCategories.includes(text) ? text : null;
+  } catch (error) {
+    console.error("Error al contactar la API de Gemini:", error);
+    return null;
+  }
 };
 
 export const calculatePaymentMatrix = (

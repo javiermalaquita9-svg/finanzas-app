@@ -64,6 +64,7 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   children?: React.ReactNode;
   value?: string | number | readonly string[];
   onChange?: React.ChangeEventHandler<HTMLSelectElement>;
+  disabled?: boolean;
 }
 
 export const Select = ({ label, children, className = "", ...props }: SelectProps) => (

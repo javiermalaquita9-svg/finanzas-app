@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Wallet, TrendingUp, TrendingDown, CreditCard, Trash2 } from 'lucide-react';
 import { Card, Button, Input, Select } from '../components/UI'; // This path is likely correct
 import { Transaction, Categories, CardData, SummaryData, PaidMonths } from '../types';
-import { formatCurrency, getMonthKey } from '../utils';
+import { formatCurrency, getMonthKey, getCategoryFromAI } from '../utils';
 
 interface SummaryViewProps {
   transactions: Transaction[];
@@ -16,6 +16,7 @@ interface SummaryViewProps {
 }
 
 export const SummaryView = ({ transactions, addTransaction, categories, cards, totalBalance, summary, promptDelete, paidMonths }: SummaryViewProps) => {
+  const [isAISuggesting, setIsAISuggesting] = useState(false);
   const [form, setForm] = useState({
     type: 'gasto' as 'ingreso' | 'gasto' | 'ahorro',
     category: '',
@@ -106,6 +107,20 @@ export const SummaryView = ({ transactions, addTransaction, categories, cards, t
     setForm({ ...form, amount: value });
   };
 
+  const handleDescriptionBlur = async () => {
+    if (form.description && form.type !== 'ahorro') {
+      setIsAISuggesting(true);
+      const suggestedCategory = await getCategoryFromAI(form.description, categories);
+      if (suggestedCategory) {
+        const isCard = cards.some(c => c.name === suggestedCategory);
+        const newType = isCard ? 'gasto' : (categories.ingreso.includes(suggestedCategory) ? 'ingreso' : 'gasto');
+        
+        setForm(f => ({ ...f, category: suggestedCategory, type: newType }));
+      }
+      setIsAISuggesting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -150,15 +165,21 @@ export const SummaryView = ({ transactions, addTransaction, categories, cards, t
             </div>
 
             {form.type !== 'ahorro' && (
-              <Select
-                label="Categoría"
-                value={form.category}
-                onChange={e => setForm({ ...form, category: e.target.value })}
-              >
-                {getOptions().map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </Select>
+              <div className="relative">
+                <Select
+                  label="Categoría"
+                  value={form.category}
+                  onChange={e => setForm({ ...form, category: e.target.value })}
+                  disabled={isAISuggesting}
+                >
+                  {getOptions().map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </Select>
+                {isAISuggesting && (
+                  <div className="absolute top-0 right-0 mt-1 mr-1 text-xs text-slate-400 animate-pulse">IA...</div>
+                )}
+              </div>
             )}
 
             {isCreditCardSelected && (
@@ -192,6 +213,7 @@ export const SummaryView = ({ transactions, addTransaction, categories, cards, t
               placeholder="Ej. Supermercado"
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
+              onBlur={() => handleDescriptionBlur()}
               required
             />
 
