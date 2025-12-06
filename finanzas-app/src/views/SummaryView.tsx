@@ -213,7 +213,7 @@ export const SummaryView = ({ transactions, addTransaction, categories, cards, t
               placeholder="Ej. Supermercado"
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
-              onBlur={() => handleDescriptionBlur()}
+              onBlur={handleDescriptionBlur}
               required
             />
 
