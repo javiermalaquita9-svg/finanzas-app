@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Wallet, TrendingUp, TrendingDown, CreditCard, Trash2 } from 'lucide-react';
 import { Card, Button, Input, Select } from '../components/UI'; // This path is likely correct
 import { Transaction, Categories, CardData, SummaryData, PaidMonths } from '../types';
@@ -126,6 +126,16 @@ export const SummaryView = ({ transactions, addTransaction, categories, cards, t
       setIsAISuggesting(false);
     }
   };
+
+  const displayTransactions = useMemo(() => {
+    if (!Array.isArray(transactions)) {
+      return [];
+    }
+    // Defensive filter for malformed data, applied once.
+    return transactions.filter(t => 
+      t && t.id && t.date && t.description != null && t.amount != null
+    );
+  }, [transactions]);
 
   return (
     <div className="space-y-6">
@@ -256,7 +266,7 @@ export const SummaryView = ({ transactions, addTransaction, categories, cards, t
 
         <Card className="p-6 lg:col-span-3">
           <h3 className="text-lg font-bold text-slate-800 mb-4">Últimos Movimientos</h3>
-          <div className="overflow-x-auto">
+          <div className="h-[450px] overflow-y-auto pr-2">
             <table className="w-full text-left">
               <thead>
                 <tr className="text-slate-500 text-sm border-b border-slate-100">
@@ -267,7 +277,7 @@ export const SummaryView = ({ transactions, addTransaction, categories, cards, t
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {transactions.slice(0, 5).map(t => (
+                {displayTransactions.map(t => (
                   <tr key={t.id} className="text-sm">
                     <td className="py-3 text-slate-500 align-top">{t.date}</td>
                     <td className="py-3 font-medium text-slate-700 align-top">
@@ -297,7 +307,7 @@ export const SummaryView = ({ transactions, addTransaction, categories, cards, t
                     </td>
                   </tr>
                 ))}
-                {transactions.length === 0 && (
+                {displayTransactions.length === 0 && (
                   <tr>
                     <td colSpan={4} className="py-8 text-center text-slate-400">No hay movimientos</td>
                   </tr>

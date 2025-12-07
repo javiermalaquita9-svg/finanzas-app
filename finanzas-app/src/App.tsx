@@ -136,12 +136,13 @@ export default function App() {
       return;
     }
 
+    // This will hold all the unsubscribe functions for our listeners
+    const unsubscribes: (() => void)[] = [];
+
     setIsLoading(true);
     const userDocRef = doc(db, 'users', user.uid);
 
     const setupListeners = () => {
-      const unsubscribes: (() => void)[] = [];
-
       // Listener for user document (userData, categories, paidMonths)
       unsubscribes.push(onSnapshot(userDocRef, (docSnap) => {
         if (docSnap.exists()) {
@@ -169,7 +170,6 @@ export default function App() {
       });
       
       setIsLoading(false);
-      return () => unsubscribes.forEach(unsub => unsub());
     };
 
     getDoc(userDocRef).then(docSnap => {
@@ -224,6 +224,11 @@ export default function App() {
       setIsLoading(false);
     });
 
+    // The cleanup function for useEffect. It will be called when the component
+    // unmounts or when the `user` dependency changes (e.g., on logout).
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
   }, [user]);
 
   // Actions

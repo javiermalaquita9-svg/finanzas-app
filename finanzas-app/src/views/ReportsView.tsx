@@ -4,19 +4,13 @@ import { Card } from '../components/UI';
 import { Transaction, CardData, UserData, PaidMonths } from '../types';
 import { formatCurrency, calculatePaymentMatrix } from '../utils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import html2pdf from 'html2pdf.js';
 
 interface ReportsViewProps {
   transactions: Transaction[];
   cards: CardData[];
   userData: UserData;
   paidMonths: PaidMonths;
-}
-
-// Declare html2pdf on window
-declare global {
-  interface Window {
-    html2pdf: any;
-  }
 }
 
 export const ReportsView = ({ transactions, cards, userData, paidMonths }: ReportsViewProps) => {
@@ -41,17 +35,31 @@ export const ReportsView = ({ transactions, cards, userData, paidMonths }: Repor
 
   const handleDownloadPDF = async () => {
     setIsGeneratingPdf(true);
+
     const element = document.getElementById('report-content');
-    if (window.html2pdf && element) {
-      await window.html2pdf().set({
-        margin: 10,
-        filename: `Reporte_${new Date().toISOString().split('T')[0]}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      }).from(element).save();
+
+    if (!element) {
+      alert('Error: No se pudo encontrar el contenido del reporte para exportar.');
+      console.error("Element with id 'report-content' not found.");
+      setIsGeneratingPdf(false);
+      return;
     }
-    setIsGeneratingPdf(false);
+
+    try {
+      const options = {
+        margin: 10,
+        filename: `Reporte-Financiero-${endDate}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      await html2pdf().from(element).set(options).save();
+    } catch (error) {
+      alert('Ocurrió un error al generar el PDF. Revisa la consola del navegador para más detalles.');
+      console.error("Error during PDF generation:", error);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   return (
@@ -129,8 +137,9 @@ export const ReportsView = ({ transactions, cards, userData, paidMonths }: Repor
               <p className="text-slate-400 text-center text-sm">Sin datos para graficar.</p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart isAnimationActive={false}>
                   <Pie
+                    isAnimationActive={false}
                     data={chartData}
                     cx="50%"
                     cy="50%"
