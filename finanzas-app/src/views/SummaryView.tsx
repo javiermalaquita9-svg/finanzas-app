@@ -6,18 +6,18 @@ import { formatCurrency, getMonthKey, getCategoryFromAI } from '../utils';
 
 interface SummaryViewProps {
   transactions: Transaction[];
-  addTransaction: (t: Transaction) => void;
+  addTransaction: (t: Omit<Transaction, 'id'>) => Promise<void>;
   categories: Categories;
   cards: CardData[];
   totalBalance: number;
   summary: SummaryData;
-  promptDelete: (id: number) => void;
+  promptDelete: (id: string) => void;
   paidMonths: PaidMonths;
 }
 
 export const SummaryView = ({ transactions, addTransaction, categories, cards, totalBalance, summary, promptDelete, paidMonths }: SummaryViewProps) => {
   const [isAISuggesting, setIsAISuggesting] = useState(false);
-  const [form, setForm] = useState({
+  const initialFormState = {
     type: 'gasto' as 'ingreso' | 'gasto' | 'ahorro',
     category: '',
     description: '',
@@ -25,7 +25,8 @@ export const SummaryView = ({ transactions, addTransaction, categories, cards, t
     date: new Date().toISOString().split('T')[0],
     installments: '',
     firstPaymentDate: ''
-  });
+  };
+  const [form, setForm] = useState(initialFormState);
 
   const getOptions = () => {
     if (form.type === 'gasto') {
@@ -75,22 +76,27 @@ export const SummaryView = ({ transactions, addTransaction, categories, cards, t
     }
   }, [form.type, categories, cards]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.amount || !form.description) return;
 
-    const newTrans: Transaction = {
-      id: Date.now(),
+    const newTransData: Omit<Transaction, 'id'> = {
       type: form.type,
       category: form.category,
       description: form.description,
       amount: parseFloat(form.amount),
-      date: isCreditCardSelected ? form.firstPaymentDate || form.date : form.date,
-      installments: isCreditCardSelected ? (parseInt(form.installments) || 1) : undefined,
-      firstPaymentDate: isCreditCardSelected ? form.firstPaymentDate : undefined
+      date: form.date,
     };
-    addTransaction(newTrans);
-    setForm({ ...form, description: '', amount: '', installments: '', firstPaymentDate: '' });
+
+    if (isCreditCardSelected) {
+      newTransData.installments = parseInt(form.installments) || 1;
+      if (form.firstPaymentDate) {
+        newTransData.firstPaymentDate = form.firstPaymentDate;
+      }
+    }
+
+    await addTransaction(newTransData);
+    setForm(initialFormState);
   };
 
   const getButtonColor = () => {

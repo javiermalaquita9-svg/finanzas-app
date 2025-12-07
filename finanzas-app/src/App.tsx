@@ -362,8 +362,10 @@ export default function App() {
     if (!user) return;
     try {
       await addDoc(collection(db, `users/${user.uid}/transactions`), newTransData);
+      console.log("¡Transacción agregada con éxito!"); // Mensaje de éxito
     } catch (error) {
       console.error("Error adding transaction:", error);
+      alert("Hubo un error al agregar la transacción. Revisa la consola para más detalles.");
     }
   };
 
